@@ -1,4 +1,5 @@
 use std::fs::File;
+use std::io;
 use std::path::PathBuf;
 
 use anyhow::Result;
@@ -44,7 +45,7 @@ struct Config {
     min_cells: usize,
 
     /// Reads per cell
-    /// Only output the barcodes that are  in more than <R> reads per cell
+    /// Only output the barcodes that on average have more than <R> reads per cell
     #[arg(long, short = 'r')]
     reads_per_cell: Option<usize>,
 
@@ -55,6 +56,11 @@ struct Config {
 
 fn main() -> Result<()> {
     let config = Config::parse();
+
+    let tty = termion::is_tty(&io::stdout());
+    if tty {
+        println!("{}", termion::clear::All);
+    }
 
     // open the FastQ pair
     let mut reader = reader::Reader::from_paths(&config.r1, &config.r2)?;
@@ -94,14 +100,28 @@ fn main() -> Result<()> {
         }
 
         count += 1;
-        if count % 1_000_000 == 0 {
-            let summary = Summary::new(&barcodes, &counts);
-            summary.print_matches(config.min_reads);
+
+        //update live stats if interactive tty
+        if tty {
+            if count % 500_000 == 0 {
+                let summary = Summary::new(&barcodes, &counts);
+                summary.print_matches(
+                    config.min_reads,
+                    config.min_cells,
+                    config.reads_per_cell,
+                    tty,
+                );
+            }
         }
     }
 
     let summary = Summary::new(&barcodes, &counts);
-    summary.print_matches(3);
+    summary.print_matches(
+        config.min_reads,
+        config.min_cells,
+        config.reads_per_cell,
+        tty,
+    );
     if let Some(out) = config.out {
         let f = File::create(out)?;
         summary.write_csv(f, config.min_cells, config.min_reads, config.reads_per_cell)?;
