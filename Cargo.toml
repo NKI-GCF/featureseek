@@ -1,0 +1,17 @@
+[package]
+name = "featureseek"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ahash = "0.8.0"
+anyhow = "1.0.66"
+bktree = "1.0.1"
+clap = { version = "4.0.18", features = ["cargo", "derive"] }
+csv = "1.1.6"
+fastq = "0.6.0"
+flate2 = { version = "1.0.24", features = ["zlib-ng-compat"], default-features = false }
+niffler = { version = "2.4.0", default-features = false, features = ["gz"] }
+triple_accel = "0.4.0"
