@@ -25,7 +25,7 @@ pub type BarcodeRef = usize;
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Config {
-    /// Provide the totalseq style csv file with the antibody barcodes
+    /// Provide the TotalSeq style csv file with the antibody barcodes
     #[arg(long)]
     csv: PathBuf,
 
@@ -54,7 +54,7 @@ struct Config {
     #[arg(long, short = 'r', value_name = "R")]
     reads_per_cell: Option<usize>,
 
-    /// Out CSV for 10X cellranger.
+    /// Out hashtag CSV for 10X cellranger pipeline.
     #[arg(long, short = 'o')]
     out: Option<PathBuf>,
 
@@ -63,12 +63,12 @@ struct Config {
     ignore: HashSet<Vec<u8>>,
 
     /// Count unknown.
-    /// Count the barcodes not matching to the reference as summarize at end.
+    /// Count the barcodes not matching to the reference and summarize at end.
     #[arg(long, short = 'u')]
     unknown: bool,
 
     /// Approximate matching.
-    /// Count the barcodes alowing a levenshtein distance up to 2 to the reference.
+    /// Count the barcodes allowing a levenshtein distance up to 2 to the reference.
     #[arg(long, short = 'a')]
     approximate: bool,
 }
@@ -153,7 +153,7 @@ fn main() -> Result<()> {
         config.reads_per_cell,
         tty,
     );
-    println!("Examnined {count} reads");
+    println!("Examined {count} reads");
 
     if config.unknown {
         summary.print_unknown(config.min_reads);
