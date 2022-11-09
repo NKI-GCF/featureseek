@@ -7,17 +7,17 @@ use anyhow::Result;
 use bktree::BkTree;
 use triple_accel::levenshtein::levenshtein_exp;
 
-use crate::BCLENGTH;
+use crate::{Barcode, BCLENGTH};
 
-fn dist(a: &[u8; BCLENGTH], b: &[u8; BCLENGTH]) -> isize {
+fn dist(a: &Barcode, b: &Barcode) -> isize {
     levenshtein_exp(a, b) as isize
 }
 
 pub struct Barcodes {
     pub records: Vec<csv::StringRecord>,
     header: csv::StringRecord,
-    barcodes: AHashMap<[u8; BCLENGTH], usize>,
-    bktree: BkTree<[u8; BCLENGTH]>,
+    barcodes: AHashMap<Barcode, usize>,
+    bktree: BkTree<Barcode>,
 }
 pub enum MatchResult {
     NoHit,
@@ -46,13 +46,12 @@ impl Barcodes {
 
         let mut records = Vec::new();
         let mut barcodes = AHashMap::new();
-        let mut pos = 0;
-        for result in reader.records() {
+        for (pos, result) in reader.records().enumerate() {
             let record = result?;
 
             let barcode = record
                 .get(4)
-                .ok_or(IoError::new(
+                .ok_or_else(|| IoError::new(
                     ErrorKind::InvalidData,
                     "Expected barcode in column 5",
                 ))?
@@ -67,8 +66,8 @@ impl Barcodes {
 
             records.push(record);
             barcodes.insert(barcode, pos);
-            pos += 1;
         }
+
         let mut bktree = BkTree::new(dist);
         bktree.insert_all(barcodes.keys().cloned());
 
@@ -80,17 +79,18 @@ impl Barcodes {
         })
     }
 
-    pub fn find(&self, s: &[u8; BCLENGTH]) -> MatchResult {
+    pub fn find(&self, s: &Barcode, approximate: bool) -> MatchResult {
         if let Some(&i) = self.barcodes.get(s.as_slice()) {
             MatchResult::Unique(i)
-        } else {
-            return MatchResult::NoHit;
+        } else if approximate {
             let hits = self.bktree.find(s.to_owned(), 2);
             match hits.len() {
                 0 => MatchResult::NoHit,
                 1 => MatchResult::Dist(*self.barcodes.get(hits[0].0).unwrap(), hits[0].1),
                 _ => MatchResult::Multiple,
             }
+        } else {
+            MatchResult::NoHit
         }
     }
 

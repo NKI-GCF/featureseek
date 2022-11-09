@@ -1,4 +1,5 @@
 use std::io::Write;
+use std::hash::Hash;
 
 use ahash::AHashMap as HashMap;
 use anyhow::Result;
@@ -8,16 +9,24 @@ use cli_table::{
 };
 
 use crate::barcodes::Barcodes;
-use crate::CCLENGTH;
+use crate::{CellCode, Barcode, BarcodeRef};
 
 /// Count the barcode (usize references) per cellcode
 #[derive(Default)]
 pub struct Counts {
-    cells: HashMap<Vec<u8>, HashMap<usize, usize>>,
+    cells: CellCounts<BarcodeRef>,
+    ignored: usize,
     multiple: usize,
     nohit: usize,
     not_whitelisted: usize,
+    unknown: CellCounts<Barcode>,
 }
+
+#[derive(Default)]
+struct BarcodeCounts<T>(HashMap<T, usize>);
+
+#[derive(Default)]
+pub struct CellCounts<T>(HashMap<CellCode, BarcodeCounts<T>>);
 
 pub struct Summary<'a> {
     barcodes: &'a Barcodes,
@@ -25,14 +34,18 @@ pub struct Summary<'a> {
 }
 
 impl Counts {
-    pub fn count_barcode(&mut self, cellcode: &[u8; CCLENGTH], pos: usize) {
-        if let Some(cell) = self.cells.get_mut(cellcode.as_slice()) {
-            let count = cell.entry(pos).or_insert(0);
-            *count += 1;
-        } else {
-            let cell = [(pos, 1)].into_iter().collect();
-            self.cells.insert(cellcode.as_slice().to_vec(), cell);
-        }
+    pub fn count_barcode(&mut self, cellcode: CellCode, pos: usize) {
+        let cell = self.cells.0.entry(cellcode).or_default();
+        cell.count(pos);
+    }
+
+    pub fn count_unknown(&mut self, cellcode: CellCode, barcode: Barcode) {
+        let cell = self.unknown.0.entry(cellcode).or_default();
+        cell.count(barcode);
+    }
+
+    pub fn ignored(&mut self) {
+        self.ignored += 1;
     }
 
     pub fn nohit(&mut self) {
@@ -48,48 +61,59 @@ impl Counts {
     }
 }
 
-impl<'a> Summary<'a> {
-    pub fn new(barcodes: &'a Barcodes, counts: &'a Counts) -> Summary<'a> {
-        Summary { counts, barcodes }
+impl<T> BarcodeCounts<T> where T: Eq + Hash {
+
+    /// Add a count for the provided barcode
+    pub fn count(&mut self, cell_id: T) {
+        if let Some(count) = self.0.get_mut(&cell_id) {
+            *count += 1;
+        } else {
+            self.0.insert(cell_id, 1);
+        }
     }
 
-    pub fn summarize(&self, min_reads: usize) -> HashMap<usize, (usize, usize)> {
-        let mut result = HashMap::new();
-        self.counts
-            .cells
-            .values()
-            .flat_map(|v| {
-                v.iter().filter_map(|(pos, count)| {
-                    if *count > min_reads {
-                        Some((pos, count))
-                    } else {
-                        None
-                    }
-                })
+    /// Filter the barcodes to those having more than min_reads counts
+    pub fn filter_hits(&self, min_reads: usize) -> impl Iterator<Item=(&T, usize)> {
+        self.0
+            .iter()
+            .filter_map(move |(id, count)| {
+                if *count > min_reads {
+                    Some((id, *count))
+                } else {
+                    None
+                }
             })
-            .for_each(|(&pos, count)| {
-                let c = result.entry(pos).or_insert((0usize, 0usize));
+    }
+}
+
+impl<T> CellCounts<T> where T: Eq + Hash {
+    /// Return a flattened map of barcode ids and their barcode and cell counts
+    fn summary(&self, min_reads: usize) -> HashMap<&T, (usize, usize)> {
+        let mut result = HashMap::new();
+        self.0.values()
+            .flat_map(|counter| counter.filter_hits(min_reads))
+            .for_each(|(id, count)| {
+                let c = result.entry(id).or_insert((0usize, 0usize));
                 c.0 += count;
                 c.1 += 1;
             });
 
         result
     }
+}
 
-    pub fn print_matches(
+impl<'a> Summary<'a> {
+    pub fn new(barcodes: &'a Barcodes, counts: &'a Counts) -> Summary<'a> {
+        Summary { counts, barcodes }
+    }
+
+   pub fn print_matches(
         &self,
         min_cells: usize,
         min_reads: usize,
         reads_per_cell: Option<usize>,
         tty: bool,
     ) {
-        let mut hits: Vec<_> = self
-            .summarize(min_reads)
-            .into_iter()
-            .map(|(pos, (count, cells))| (pos, count, cells))
-            .collect();
-
-        hits.sort_by_key(|e| e.1);
 
         let table = self.gen_table(min_cells, min_reads, reads_per_cell);
 
@@ -100,8 +124,8 @@ impl<'a> Summary<'a> {
         let cl: &str = termion::clear::AfterCursor.as_ref();
 
         println!(
-            "{cl}\nNo barcode hit: {}{cl}\nMultiple barcode hits: {}{cl}\nCellcodes not whitelisted: {}{cl}",
-            self.counts.nohit, self.counts.multiple, self.counts.not_whitelisted
+            "{cl}\nIgnored: {}{cl}\nNo barcode hit: {}{cl}\nMultiple barcode hits: {}{cl}\nCellcodes not whitelisted: {}{cl}",
+            self.counts.ignored, self.counts.nohit, self.counts.multiple, self.counts.not_whitelisted
         );
     }
 
@@ -112,7 +136,8 @@ impl<'a> Summary<'a> {
         reads_per_cell: Option<usize>,
     ) -> TableStruct {
         let mut hits: Vec<_> = self
-            .summarize(min_reads)
+            .counts.cells
+            .summary(min_reads)
             .into_iter()
             .map(|(pos, (count, cells))| (pos, count, cells))
             .collect();
@@ -121,7 +146,7 @@ impl<'a> Summary<'a> {
 
         let mut tabledata = Vec::new();
         for (pos, count, cells) in hits.into_iter().rev() {
-            let record = &self.barcodes.records[pos];
+            let record = &self.barcodes.records[*pos];
 
             let col = if passes(count, cells, min_reads, min_cells, reads_per_cell) {
                 Some(Color::Green)
@@ -151,6 +176,39 @@ impl<'a> Summary<'a> {
             .separator(Separator::builder().row(None).column(None).build())
     }
 
+
+    pub fn print_unknown(&self, min_reads: usize) {
+        let mut hits: Vec<_> = self.counts.unknown.summary(min_reads)
+            .into_iter()
+            .map(|(pos, (count, cells))| (pos, count, cells))
+            .collect();
+        hits.sort_by_key(|e| e.1);
+
+        let mut tabledata = Vec::new();
+        for (barcode, count, cells) in hits.iter().rev().take(20) {
+            tabledata.push(vec![
+                String::from_utf8_lossy(barcode.as_slice()).cell(),
+                count.cell().justify(Justify::Right),
+                cells.cell().justify(Justify::Right),
+                (count / cells).cell().justify(Justify::Right),
+            ]);
+        }
+
+        let table = tabledata
+            .table()
+            .title(vec![
+                "barcode".cell(),
+                format!("count (>{}/c)", min_reads).cell(),
+                "cells".cell(),
+                "reads/cell".cell(),
+            ])
+            .border(Border::builder().build())
+            .separator(Separator::builder().row(None).column(None).build());
+
+        println!("\nUnknown barcode summary ({} total):\n{}", hits.len(), table.display().unwrap());
+
+    }
+
     pub fn write_csv<W: Write>(
         &self,
         w: W,
@@ -158,7 +216,7 @@ impl<'a> Summary<'a> {
         min_reads: usize,
         reads_per_cell: Option<usize>,
     ) -> Result<()> {
-        let result = self.summarize(min_reads);
+        let result = self.counts.cells.summary(min_reads);
 
         self.barcodes.write_csv(
             w,
@@ -167,11 +225,12 @@ impl<'a> Summary<'a> {
                 .filter(|&(_pos, (count, cells))| {
                     passes(count, cells, min_cells, min_reads, reads_per_cell)
                 })
-                .map(|(pos, _)| pos),
+                .map(|(pos, _)| *pos),
         )
     }
 }
 
+/// Helper function for testing if the thresholds are met
 fn passes(
     count: usize,
     cells: usize,
