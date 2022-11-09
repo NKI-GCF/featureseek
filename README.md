@@ -43,7 +43,7 @@ order to minimize noise only barcodes that are found on cells more than the
 `--min_reads` option are analysed. To further select the true features two
 additional options are available.  `--min-cells C` requires the number of cell
 with that barcode the be at least `C`. `--reads-per-cell R` requires the average
-number of reads per (positive) cell to be at least `R`.
+number of reads for the (positive) cells to be at least `R`.
 
 ## Required data
 The TotalSeq CSV file can be found at the [BioLegend website](https://www.biolegend.com/en-us/totalseq/barcode-lookup). Use the
@@ -59,5 +59,8 @@ cellranger-7.0.1/lib/python/cellranger/barcodes/*.txt
 ## Finally
 This is a QC tool, not a quantification tool. No cellcodes are selected except
 the optional whitelist. Expect higher numbers than from the final `Cell Ranger` pipeline.
+
+When checking the unmatched barcodes (`--unknown`) it's best to also enable
+`--approximate` which gives cleaner results (at some runtime costs).
 
 
