@@ -109,13 +109,13 @@ impl<'a> Summary<'a> {
 
    pub fn print_matches(
         &self,
-        min_cells: usize,
         min_reads: usize,
+        min_cells: usize,
         reads_per_cell: Option<usize>,
         tty: bool,
     ) {
 
-        let table = self.gen_table(min_cells, min_reads, reads_per_cell);
+        let table = self.gen_table(min_reads, min_cells, reads_per_cell);
 
         if tty {
             print!("{}", termion::cursor::Goto(1, 1));
@@ -131,8 +131,8 @@ impl<'a> Summary<'a> {
 
     pub fn gen_table(
         &self,
-        min_cells: usize,
         min_reads: usize,
+        min_cells: usize,
         reads_per_cell: Option<usize>,
     ) -> TableStruct {
         let mut hits: Vec<_> = self
@@ -212,8 +212,8 @@ impl<'a> Summary<'a> {
     pub fn write_csv<W: Write>(
         &self,
         w: W,
-        min_cells: usize,
         min_reads: usize,
+        min_cells: usize,
         reads_per_cell: Option<usize>,
     ) -> Result<()> {
         let result = self.counts.cells.summary(min_reads);
@@ -223,7 +223,7 @@ impl<'a> Summary<'a> {
             result
                 .into_iter()
                 .filter(|&(_pos, (count, cells))| {
-                    passes(count, cells, min_cells, min_reads, reads_per_cell)
+                    passes(count, cells, min_reads, min_cells, reads_per_cell)
                 })
                 .map(|(pos, _)| *pos),
         )
@@ -234,8 +234,8 @@ impl<'a> Summary<'a> {
 fn passes(
     count: usize,
     cells: usize,
-    min_cells: usize,
     min_reads: usize,
+    min_cells: usize,
     reads_per_cell: Option<usize>,
 ) -> bool {
     cells >= min_cells && count > min_reads && reads_per_cell.map_or(true, |r| count / cells > r)

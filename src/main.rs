@@ -161,7 +161,7 @@ fn main() -> Result<()> {
 
     if let Some(out) = config.out {
         let f = File::create(out)?;
-        summary.write_csv(f, config.min_cells, config.min_reads, config.reads_per_cell)?;
+        summary.write_csv(f, config.min_reads, config.min_cells, config.reads_per_cell)?;
     }
 
     Ok(())
