@@ -17,7 +17,7 @@ Arguments:
   <R2>  The feature barcode read 2 FastQ file containing the barcodes
 
 Options:
-      --csv <CSV>           Provide the totalseq style csv file with the antibody barcodes
+      --csv <CSV>           Provide the totalseq csv file with the antibody barcodes
       --whitelist <FILE>    Provide the 10X barcodes whitelist file
   -b, --min-reads <B>       Minimum barcode reads per cellcode. Only count the barcodes that are found more than <B> times for a cell code [default: 5]
   -c, --min-cells <C>       Minimum number of cells having an accepted barcode. Only output the barcodes that are found in more than <C> cells [default: 5]

@@ -180,7 +180,7 @@ impl<'a> Summary<'a> {
     pub fn print_unknown(&self, min_reads: usize) {
         let mut hits: Vec<_> = self.counts.unknown.summary(min_reads)
             .into_iter()
-            .map(|(pos, (count, cells))| (pos, count, cells))
+            .map(|(barcode, (count, cells))| (barcode, count, cells))
             .collect();
         hits.sort_by_key(|e| e.1);
 
