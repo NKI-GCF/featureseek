@@ -11,8 +11,8 @@ mod counts;
 mod reader;
 mod whitelist;
 
-use barcodes::*;
-use counts::*;
+use barcodes::{Barcodes, MatchResult};
+use counts::{Counts, Summary};
 use whitelist::Whitelist;
 
 pub const CCLENGTH: usize = 16;
@@ -25,7 +25,7 @@ pub type BarcodeRef = usize;
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Config {
-    /// Provide the TotalSeq style csv file with the antibody barcodes
+    /// Provide the TotalSeq csv file with the antibody barcodes
     #[arg(long)]
     csv: PathBuf,
 
