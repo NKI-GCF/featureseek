@@ -238,5 +238,5 @@ fn passes(
     min_cells: usize,
     reads_per_cell: Option<usize>,
 ) -> bool {
-    cells >= min_cells && count > min_reads && reads_per_cell.map_or(true, |r| count / cells > r)
+    count > min_reads && (cells >= min_cells || reads_per_cell.map_or(true, |r| count / cells > r))
 }
