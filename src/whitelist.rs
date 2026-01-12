@@ -1,4 +1,3 @@
-use std::fs::File;
 use std::io::{BufRead, BufReader, Error as IoError};
 use std::path::Path;
 
@@ -9,7 +8,7 @@ pub struct Whitelist(AHashSet<Vec<u8>>);
 
 impl Whitelist {
     pub fn from_path<P: AsRef<Path>>(p: P) -> Result<Self> {
-        let f = File::open(p.as_ref())?;
+        let (f, _format) = niffler::from_path(p.as_ref())?;
         let b = BufReader::new(f);
         let hash = b.split(b'\n').collect::<Result<_, IoError>>()?;
 
